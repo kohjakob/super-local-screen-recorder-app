@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=629, initial-scale=0.5, minimum-scale=0.5, maximum-scale=0.5, user-scalable=no" />
+<title>Local Screen Recorder</title>
+<meta name="description" content="Record your screen with a webcam bubble, trim it and download an MP4. Runs entirely in your browser, nothing is uploaded.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='4' width='26' height='19' rx='3.5' fill='none' stroke='%23000' stroke-width='3.5'/%3E%3Cpath d='M16 23v5M10 28.5h12' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --surface-hover: #f3f2ee;
+    --text: #1c1c1e;
+    --muted: #6f6f74;
+    --border: #e6e4de;
+    --accent: #3d63f0;
+    --accent-hover: #2f51d6;
+    --accent-soft: #e9eefe;
+    --danger: #f0424c;
+    --danger-hover: #d8323c;
+    --danger-soft: rgba(240, 66, 76, 0.1);
+    --radius: 18px;
+    --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px rgba(20, 20, 30, 0.06);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+
+body {
+    font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+.app {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+    /* Bottom padding clears the fixed portfolio bar so it never covers content */
+    padding: 24px 20px 8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* Top bar */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.intro {
+    margin: -4px 0 0;
+    font-size: 15px;
+    color: var(--muted);
+}
+
+.brand-dot {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 0 4px var(--danger-soft);
+}
+
+/* Buttons */
+.btn {
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: var(--accent);
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.btn:hover { background: var(--accent-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+
+.btn-ghost {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+.btn-ghost:hover { background: var(--surface-hover); }
+
+.btn-danger { background: var(--danger); }
+.btn-danger:hover { background: var(--danger-hover); }
+
+.btn-lg { padding: 14px 26px; font-size: 16px; }
+
+.btn-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: border-radius 0.15s;
+}
+.btn.recording .btn-dot { border-radius: 2px; }
+
+.linkish {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.linkish:hover { color: var(--text); }
+
+/* Stage / preview */
+.stage {
+    position: relative;
+    min-height: 440px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.placeholder {
+    max-width: 520px;
+    padding: 48px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.placeholder .hero {
+    width: 210px;
+    height: auto;
+    margin-bottom: 6px;
+}
+
+.placeholder h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.placeholder p {
+    margin: 0;
+    font-size: 16px;
+    color: var(--muted);
+}
+
+.placeholder .fineprint { margin-top: -8px; }
+.placeholder .btn { margin-top: 8px; }
+
+.fineprint {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+#previewCanvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    touch-action: none;
+}
+
+.zoom-controls {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.zoom-controls button {
+    pointer-events: auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.zoom-controls button:hover { background: var(--surface-hover); }
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.timer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.timer .rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+.meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-height: 24px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.chip {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+/* Portfolio bar, styled after kohjakob.com's footer */
+.portfolio-bar { --kj-link: #2c5aa0; --kj-link-hover: #c0392b; --kj-gray: #999999; --kj-gray-light: #cfcfcf; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: #ffffff; box-shadow: 0 -1px 2px rgba(20, 20, 30, 0.04), 0 -8px 24px rgba(20, 20, 30, 0.06); font-family: 'Murecho', 'Libre Baskerville', serif; font-weight: 400; font-size: 1rem; line-height: 1.6; -webkit-font-smoothing: auto; color: var(--kj-gray); }
+.portfolio-bar-inner { max-width: 864px; margin: 0 auto; padding: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem 1.5rem; }
+.portfolio-bar a { color: var(--kj-link); text-decoration: none; }
+.portfolio-bar .portfolio-explore { display: inline-flex; align-items: center; gap: 0.75rem; }
+.portfolio-bar .portfolio-avatar { width: 32px; height: 32px; /* Negative margin keeps the row exactly one 1.6em text line tall, matching kohjakob.com */ margin: calc((1.6em - 32px) / 2) 0; border-radius: 50%; object-fit: cover; flex: none; }
+.portfolio-bar .portfolio-imprint { color: var(--kj-gray-light); font-variant-emoji: text; white-space: nowrap; }
+.portfolio-bar a:hover { color: var(--kj-link-hover); text-decoration: underline; }
+@media (max-width: 600px) {
+  .portfolio-bar-inner { padding: 1.25rem 1rem; justify-content: center; text-align: center; }
+  .portfolio-bar .portfolio-explore { display: block; text-align: center; }
+  .portfolio-bar .portfolio-explore > span { display: inline; }
+  .portfolio-bar .portfolio-avatar { display: inline-block; vertical-align: middle; margin: -4px 0.5rem 0 0; }
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(20, 20, 25, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.modal.open { display: flex; }
+
+.modal-card {
+    width: 100%;
+    max-width: 480px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+.modal-card.wide { max-width: 1000px; position: relative; }
+
+.confirm-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: var(--surface);
+    border-radius: var(--radius);
+}
+
+.confirm-box {
+    max-width: 380px;
+    text-align: center;
+}
+.confirm-box h3 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    font-weight: 800;
+}
+.confirm-box p {
+    margin: 0 0 20px;
+    color: var(--muted);
+}
+.confirm-box .modal-actions { justify-content: center; }
+
+.modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-head h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.close-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.close-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+.modal-body { padding: 22px; }
+.modal-body p { margin: 0 0 14px; }
+.modal-body ol { margin: 0 0 16px; padding-left: 22px; }
+.modal-body li { margin-bottom: 6px; }
+.modal-body .fineprint { margin: 0 0 18px; }
+.modal-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.modal-actions .linkish { margin-right: auto; color: var(--muted); }
+
+.device {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.device:hover { border-color: var(--accent); background: var(--accent-soft); }
+.device.selected { border-color: var(--accent); background: var(--accent-soft); }
+.empty-note { color: var(--muted); font-size: 14px; }
+
+/* Trim editor */
+.video-wrap {
+    position: relative;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#trimPreviewVideo {
+    width: 100%;
+    max-height: 58vh;
+    display: block;
+    background: #000;
+}
+
+.play-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 72px;
+    height: 72px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+    font-size: 26px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+}
+.play-btn svg { width: 30px; height: 30px; }
+
+.progress {
+    position: relative;
+    height: 6px;
+    margin: 18px 0 14px;
+    border-radius: 3px;
+    background: var(--border);
+    cursor: pointer;
+}
+
+.progress-filled {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    pointer-events: none;
+}
+
+.progress-handle {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 14px;
+    height: 14px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.timeline {
+    position: relative;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--border);
+}
+
+.trim-range {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: var(--accent);
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+.trim-handle {
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    width: 16px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--accent);
+    border: 2px solid #ffffff;
+    cursor: ew-resize;
+}
+.trim-handle:hover { background: var(--accent-hover); }
+.trim-handle-start { left: 0; transform: translateX(-50%); }
+.trim-handle-end { right: 0; transform: translateX(50%); }
+
+.trim-times {
+    display: flex;
+    justify-content: space-between;
+    margin: 10px 0 18px;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+.trim-times b { color: var(--text); font-weight: 700; }
+
+.trim-status {
+    min-height: 18px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: right;
+}
+
+@media (max-width: 640px) {
+    .app { padding: 16px 16px 32px; }
+    .placeholder h1 { font-size: 24px; }
+    .placeholder { padding: 36px 16px; }
+    .stage { min-height: 360px; }
+    .trim-handle { width: 28px; }
+}
+</style>
+</head>
+<body>
+<div id="app" class="app">
+    <header class="topbar">
+        <div class="brand"><span class="brand-dot"></span>Super-local-screen-recorder-App</div>
+        <button id="saveForLaterBtn" class="btn btn-ghost" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Save recorder.html for later
+        </button>
+    </header>
+
+    <p class="intro">This recorder is <b>one self-contained HTML file</b>. Nothing runs on a server, so you can save the file and keep using it from your own computer, offline.</p>
+
+    <section id="stage" class="stage">
+        <div id="previewPlaceholder" class="placeholder">
+            <svg class="hero" viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="8" y="8" width="184" height="104" rx="14" fill="#eef1fb" stroke="#1c1c1e" stroke-width="5"/>
+                <path d="M100 112v10" stroke="#1c1c1e" stroke-width="5"/>
+                <path d="M72 124h56" stroke="#1c1c1e" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="31" cy="31" r="6" fill="#f0424c"/>
+                <circle cx="152" cy="72" r="24" fill="#ffffff" stroke="#3d63f0" stroke-width="5"/>
+                <circle cx="144" cy="68" r="3" fill="#1c1c1e"/>
+                <circle cx="160" cy="68" r="3" fill="#1c1c1e"/>
+                <path d="M144 79q8 6 16 0" stroke="#1c1c1e" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+            </svg>
+            <h1>Record your screen, right here.</h1>
+            <p>Screen, webcam and microphone. Download as MP4.</p>
+            <span class="fineprint">Your browser will ask for camera, microphone and screen access.</span>
+            <button id="requestPermissions" class="btn btn-lg" type="button">Get started</button>
+        </div>
+        <canvas id="previewCanvas" hidden></canvas>
+        <div id="webcamZoomControls" class="zoom-controls" hidden>
+            <button id="zoomInBtn" type="button" title="Bigger webcam">+</button>
+            <button id="zoomOutBtn" type="button" title="Smaller webcam">&minus;</button>
+        </div>
+    </section>
+
+    <section id="controls" class="toolbar" hidden>
+        <div class="toolbar-group">
+            <button id="toggleRecording" class="btn btn-danger" type="button">
+                <span class="btn-dot"></span><span id="recordLabel">Record</span>
+            </button>
+            <div id="timer-container" class="timer" hidden>
+                <span class="rec-dot"></span><span id="timerText">0:00</span>
+            </div>
+        </div>
+        <div class="toolbar-group">
+            <button id="toggleWebcam" class="btn btn-ghost" type="button">Hide webcam</button>
+            <button id="selectAudioSource" class="btn btn-ghost" type="button">Microphone</button>
+            <button id="selectScreenSource" class="btn btn-ghost" type="button">Change screen</button>
+        </div>
+    </section>
+
+    <div class="meta">
+        <span id="status"></span>
+        <div id="sourceInfo" class="chips" hidden>
+            <span id="screenSourceInfo" class="chip"></span>
+            <span id="audioSourceInfo" class="chip"></span>
+        </div>
+    </div>
+
+</div>
+
+<div id="unsupportedNotice" class="app" hidden>
+    <div class="placeholder">
+        <svg class="hero" viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="8" y="8" width="184" height="104" rx="14" fill="#eef1fb" stroke="#1c1c1e" stroke-width="5"/>
+            <path d="M100 112v10" stroke="#1c1c1e" stroke-width="5"/>
+            <path d="M72 124h56" stroke="#1c1c1e" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="31" cy="31" r="6" fill="#f0424c"/>
+        </svg>
+        <h1>Open on a modern browser on desktop</h1>
+        <p>Screen recording needs the Screen Capture API, which phones and tablets don't support.</p>
+        <span class="fineprint">Try Chrome, Edge, Firefox or Safari on a computer.</span>
+    </div>
+</div>
+
+<footer class="portfolio-bar">
+    <div class="portfolio-bar-inner">
+        <span class="portfolio-explore">
+            <img class="portfolio-avatar" src="data:image/webp;base64,UklGRiQEAABXRUJQVlA4IBgEAABwEwCdASpAAEAAPmEojkUkIqEYCwZ8QAYEoAuzPCzfF3DbQX7etbl+bv4xJRuG+uSLzltuWaZKal5f/kIpjwuaRTOvMK66rgT0ja8Nn5GGqvLtCZYx6ovk8xXurYFQH732TNf0M3e83/z7s/BXN1GZV61MZu6qwM1w7DZ5O53OY63qrBCFc2fVgZpwrzLXa4YzQwXW7JzYOAyZGY6JuCL/ZqdgAAD+/pOuqPckdsQ4mBw3taQYgw+tP6m7PbcUAKbvIDeBiS0LWossxqghfwLfY1zHHTNbokvRNOL+gWf+SMKnn84sK/WerA1S7Fy1sm6yZlMeokgpiX+s1BrnYeFALKWScZNaTqCNaQvA4bF0PrJkeyvcWY15/m+z5eWlZR+N+lHSPLSW+tH353/8B2OBJGlL/rjB0PZWU6l7rxHG+jYg7pQMkagKw9gcRo5Rre63HSj6kEMlrWm0UnV6kaZU+g7ry5j5pcvTkePrZNXsQc5c7FraAtaAIDo7DLxojlvwqnW+wX5/cWQAdO8YoI7ClxIIZ/NsNnEA1RZS9v7oJEDP0EZ9JNr0mKoJQImovT2Digpl04ARonbxMBrUxPLvbcjQkq9zKkZvpB9SDqaEpRkyTeaPqdmdFq2TF5HtwAd1lC/4RqtQj3OKV3M8ijr/pJKhvOYALPCIm/Spl4Cs0P88tO4M1RwFp/Wq/VnaLNU5cjsBpk06wK0NJ1cJThHi+2jImCCIP+6bSkUrt6aB1bU1EJuxkz4BoeEhl2c/Yoo+8tTH9oSazat4zRyBXter5JEvj6GIOBBgZ+AYIGTojrZ/2GvvVoFy1/tgagbAfc/KEQ08sRtqBrt+XpdGioJTDdHkkSEavF9GvDvbVsGoUDn4eWUkgVIi9c1y8Ao3fuQXz0F/StBObk7lNXM0DXnYZ74P1Q/tuSu634rLw2YQ7JvaX9vj0TEcVrH6rJ7dncWOLg7kVDOpdANa5MkW01ciBeYyb0pqINI4qx6hZrY0dj8EtlMbHMxv0QCvGxM1rKpW3a+IWFctHahuEFNZwKuwtJNlMvukCgyZUyK7O3M9p8A3w7Dx6zQNCiwHk9OQMli0p54Rc41csch5buE0Fk54hr20x/nhfD064evWf5YvftoLcYOPd0ANA1m3ee//k01FCix7Snb5Slse8iHQ5MCRHX9tmwW5Rw62PKbj8MKoV8Cb76RaLg8C/3fTwxPbHPd3YpHVhLNhrM7NdrTrWC9Egd/I+4titSuA9zT7Hsa4/+3H+JSUYSQjP80KlgUGvWb3+gFZPtG0YBtqAc63pu+zSP0ht7oRD446NZo+n+Uarj+gUjycSIXGOPyHRI0dBIN61x3vxbzL3KMid6RXRPnx9G2HRXLXadrwKk/2/ah4oa+YYOfQAAAA" alt="Jakob Kohlhas" width="32" height="32">
+            <span>Explore other <a href="https://kohjakob.com/code/">code</a> and <a href="https://kohjakob.com/paintings/">paintings</a> at kohjakob.com</span>
+        </span>
+        <a class="portfolio-imprint" href="https://kohjakob.com/imprint/" target="_blank" rel="noopener">Imprint &#x2197;&#xFE0E;</a>
+    </div>
+</footer>
+
+<!-- Save for later -->
+<div id="saveModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
+    <div class="modal-card">
+        <div class="modal-head">
+            <h2 id="saveModalTitle">Save for later</h2>
+            <button id="closeSaveModal" class="close-btn" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>This whole app is one HTML file. Save it once and it keeps working without this site, without internet and without installing anything.</p>
+            <ol>
+                <li>Hit <b>Download</b> below. You get a file called <code>recorder.html</code>.</li>
+                <li>Keep it anywhere: Desktop, Documents, a USB stick.</li>
+                <li>Double-click it. It opens in your browser and works exactly like this page.</li>
+            </ol>
+            <p class="fineprint">Chrome, Edge and Safari record MP4. Firefox records WebM. Recordings download straight to your computer and are never uploaded. Offline, the page uses your system font instead of Nunito.</p>
+            <div class="modal-actions">
+                <button id="saveNotNowBtn" class="btn btn-ghost" type="button">Not now</button>
+                <button id="downloadPageBtn" class="btn" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Microphone picker -->
+<div id="audioSourceModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="audioModalTitle">
+    <div class="modal-card">
+        <div class="modal-head">
+            <h2 id="audioModalTitle">Microphone</h2>
+            <button id="closeAudioModal" class="close-btn" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="audioDevicesList"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Trim editor -->
+<div id="trimEditorModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="trimModalTitle">
+    <div class="modal-card wide">
+        <div class="modal-head">
+            <h2 id="trimModalTitle">Trim and download</h2>
+            <button id="closeTrimEditor" class="close-btn" type="button" aria-label="Discard recording" title="Discard recording">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="video-wrap">
+                <video id="trimPreviewVideo" playsinline></video>
+                <button id="videoPlayPause" class="play-btn" type="button" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
+            </div>
+
+            <div id="videoProgressTrack" class="progress">
+                <div id="videoProgressFilled" class="progress-filled"></div>
+                <div id="videoProgressHandle" class="progress-handle"></div>
+            </div>
+
+            <div id="timelineTrack" class="timeline">
+                <div id="trimRange" class="trim-range"></div>
+                <div id="trimHandleStart" class="trim-handle trim-handle-start"></div>
+                <div id="trimHandleEnd" class="trim-handle trim-handle-end"></div>
+            </div>
+
+            <div class="trim-times">
+                <span>Start <b id="trimStartTime">0:00</b></span>
+                <span>Length <b id="trimDuration">0:00</b></span>
+                <span>End <b id="trimEndTime">0:00</b></span>
+            </div>
+
+            <div class="modal-actions">
+                <button id="discardRecordingBtn" class="linkish" type="button">Discard recording</button>
+                <button id="trimCancelBtn" class="btn btn-ghost" type="button">Download original</button>
+                <button id="trimDownloadBtn" class="btn" type="button">Download trimmed</button>
+            </div>
+            <div id="trimStatus" class="trim-status"></div>
+        </div>
+        <div id="discardConfirm" class="confirm-panel" hidden>
+            <div class="confirm-box">
+                <h3>Discard this recording?</h3>
+                <p>It has not been downloaded yet. Once discarded it is gone.</p>
+                <div class="modal-actions">
+                    <button id="discardKeepBtn" class="btn btn-ghost" type="button">Keep editing</button>
+                    <button id="discardConfirmBtn" class="btn btn-danger" type="button">Discard</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+// Snapshot for "Save for later" when opened from disk, where fetch() can't reach the page
+const PAGE_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+const PAGE_FILENAME = 'recorder.html';
+
+const $ = (id) => document.getElementById(id);
+
+// DOM Elements
+const requestPermissionsBtn = $('requestPermissions');
+const controlsSection = $('controls');
+const toggleRecordingBtn = $('toggleRecording');
+const recordLabel = $('recordLabel');
+const toggleWebcamBtn = $('toggleWebcam');
+const selectScreenSourceBtn = $('selectScreenSource');
+const selectAudioSourceBtn = $('selectAudioSource');
+const timerContainer = $('timer-container');
+const timerText = $('timerText');
+const statusEl = $('status');
+const previewContainer = $('stage');
+const previewCanvas = $('previewCanvas');
+const ctx = previewCanvas.getContext('2d');
+const previewPlaceholder = $('previewPlaceholder');
+const webcamZoomControls = $('webcamZoomControls');
+const zoomInBtn = $('zoomInBtn');
+const zoomOutBtn = $('zoomOutBtn');
+const sourceInfo = $('sourceInfo');
+const screenSourceInfo = $('screenSourceInfo');
+const audioSourceInfo = $('audioSourceInfo');
+
+const saveModal = $('saveModal');
+const saveForLaterBtn = $('saveForLaterBtn');
+const closeSaveModal = $('closeSaveModal');
+const saveNotNowBtn = $('saveNotNowBtn');
+const downloadPageBtn = $('downloadPageBtn');
+
+const audioSourceModal = $('audioSourceModal');
+const audioDevicesList = $('audioDevicesList');
+const closeAudioModal = $('closeAudioModal');
+
+const trimEditorModal = $('trimEditorModal');
+const trimPreviewVideo = $('trimPreviewVideo');
+const videoPlayPause = $('videoPlayPause');
+const videoProgressTrack = $('videoProgressTrack');
+const videoProgressFilled = $('videoProgressFilled');
+const videoProgressHandle = $('videoProgressHandle');
+const closeTrimEditor = $('closeTrimEditor');
+const discardRecordingBtn = $('discardRecordingBtn');
+const discardConfirm = $('discardConfirm');
+const discardKeepBtn = $('discardKeepBtn');
+const discardConfirmBtn = $('discardConfirmBtn');
+const trimCancelBtn = $('trimCancelBtn');
+const trimDownloadBtn = $('trimDownloadBtn');
+const trimHandleStart = $('trimHandleStart');
+const trimHandleEnd = $('trimHandleEnd');
+const trimRange = $('trimRange');
+const timelineTrack = $('timelineTrack');
+const trimStartTimeDisplay = $('trimStartTime');
+const trimEndTimeDisplay = $('trimEndTime');
+const trimDurationDisplay = $('trimDuration');
+const trimStatus = $('trimStatus');
+
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
+
+// Config
+const WEBCAM_SIZE_PERCENT = 0.15;
+const WEBCAM_PADDING = 40;
+const FPS = 30;
+const CANVAS_WIDTH = 1080;
+const WEBCAM_MIN_SCALE = 1;
+const WEBCAM_MAX_SCALE = 4;
+const VIDEO_BITRATE = 5000000;
+
+previewCanvas.width = CANVAS_WIDTH;
+
+// State
+let isRecording = false;
+let isDrawing = false;
+let webcamEnabled = false;
+let screenStream = null;
+let webcamStream = null;
+let audioStream = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let currentMimeType = '';
+let drawIntervalId = null;
+let timerInterval = null;
+let recordingStartTime = null;
+let selectedScreenSourceName = 'None';
+let selectedAudioSourceName = 'None';
+let selectedAudioDeviceId = null;
+let videoScale = 1;
+
+// Webcam drag state
+let webcamX = null; // null = default bottom-right
+let webcamY = null;
+let isDraggingWebcam = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let webcamScale = 1;
+
+// Trim editor state
+let recordedVideoBlob = null;
+let trimStartTime = 0;
+let trimEndTime = 0;
+let videoDuration = 0;
+let isDraggingTrimHandle = null;
+let isDraggingProgress = false;
+let audioCtx = null;
+
+// Hidden video elements
+const screenVideo = document.createElement('video');
+const webcamVideo = document.createElement('video');
+screenVideo.autoplay = true;
+webcamVideo.autoplay = true;
+screenVideo.muted = true;
+webcamVideo.muted = true;
+screenVideo.playsInline = true;
+webcamVideo.playsInline = true;
+
+function setStatus(message) {
+    statusEl.textContent = message;
+}
+
+// developer.mozilla.org/docs/Web/CSS/@media/pointer - proxy for "no real desktop input"
+function isTouchPrimary() {
+    return matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches;
+}
+
+function showUnsupportedNotice() {
+    $('app').hidden = true;
+    $('unsupportedNotice').hidden = false;
+}
+
+function openModal(modal) {
+    modal.classList.add('open');
+}
+
+function closeModal(modal) {
+    modal.classList.remove('open');
+}
+
+function isPointInWebcam(x, y, centerX, centerY, radius) {
+    const dx = x - centerX;
+    const dy = y - centerY;
+    return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+function webcamGeometry() {
+    const diameter = CANVAS_WIDTH * WEBCAM_SIZE_PERCENT * webcamScale;
+    const radius = diameter / 2;
+    const centerX = webcamX !== null ? webcamX : CANVAS_WIDTH - radius - WEBCAM_PADDING;
+    const centerY = webcamY !== null ? webcamY : previewCanvas.height - radius - WEBCAM_PADDING;
+    return { diameter, radius, centerX, centerY };
+}
+
+// Save for later
+
+async function getPageSource() {
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+        try {
+            const response = await fetch(location.href, { cache: 'no-store' });
+            if (response.ok) return await response.text();
+        } catch (error) {
+            console.warn('Could not fetch page source, using snapshot:', error);
+        }
+    }
+    return PAGE_SOURCE;
+}
+
+async function downloadPage() {
+    downloadPageBtn.disabled = true;
+    try {
+        const source = await getPageSource();
+        triggerDownload(new Blob([source], { type: 'text/html' }), PAGE_FILENAME);
+        closeModal(saveModal);
+        setStatus('Saved. Open ' + PAGE_FILENAME + ' any time, no internet needed.');
+    } catch (error) {
+        console.error('Save for later failed:', error);
+        setStatus('Could not save the page: ' + error.message);
+    } finally {
+        downloadPageBtn.disabled = false;
+    }
+}
+
+function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
+// Setup
+
+// developer.mozilla.org/docs/Web/API/MediaDevices/getUserMedia
+async function acquireWebcam() {
+    try {
+        if (webcamStream) {
+            webcamStream.getTracks().forEach(track => track.stop());
+            webcamStream = null;
+        }
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        webcamVideo.srcObject = webcamStream;
+        await webcamVideo.play();
+        return true;
+    } catch (error) {
+        console.warn('Webcam unavailable:', error);
+        webcamStream = null;
+        return false;
+    }
+}
+
+async function acquireMicrophone(deviceId) {
+    try {
+        if (audioStream) {
+            audioStream.getTracks().forEach(track => track.stop());
+            audioStream = null;
+        }
+        audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+            video: false
+        });
+        const track = audioStream.getAudioTracks()[0];
+        selectedAudioDeviceId = track ? track.getSettings().deviceId || deviceId || null : null;
+        selectedAudioSourceName = (track && track.label) || 'Microphone';
+        return true;
+    } catch (error) {
+        console.warn('Microphone unavailable:', error);
+        audioStream = null;
+        selectedAudioDeviceId = null;
+        selectedAudioSourceName = 'None';
+        return false;
+    }
+}
+
+async function requestPermissions() {
+    // getDisplayMedia must run as the first await after the click, or WebKit
+    // no longer counts the call as user-gesture-triggered and rejects it.
+    requestPermissionsBtn.disabled = true;
+
+    const ok = await selectScreenSource();
+    if (!ok) {
+        requestPermissionsBtn.disabled = false;
+        return;
+    }
+
+    webcamEnabled = await acquireWebcam();
+    toggleWebcamBtn.textContent = webcamEnabled ? 'Hide webcam' : 'Show webcam';
+
+    await acquireMicrophone(null);
+}
+
+async function selectScreenSource() {
+    try {
+        setStatus('Pick a screen, window or tab to record...');
+
+        // developer.mozilla.org/docs/Web/API/MediaDevices/getDisplayMedia
+        const newStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always' },
+            audio: false
+        });
+
+        if (screenStream) {
+            screenStream.getVideoTracks().forEach(track => { track.onended = null; track.stop(); });
+        }
+        screenStream = newStream;
+        screenVideo.srcObject = screenStream;
+
+        await new Promise(resolve => {
+            if (screenVideo.readyState >= 2) {
+                resolve();
+            } else {
+                screenVideo.onloadedmetadata = resolve;
+            }
+        });
+
+        await screenVideo.play();
+
+        previewCanvas.height = Math.round(CANVAS_WIDTH / (screenVideo.videoWidth / screenVideo.videoHeight));
+        videoScale = CANVAS_WIDTH / screenVideo.videoWidth;
+
+        webcamX = null;
+        webcamY = null;
+        webcamScale = 1;
+
+        // setInterval instead of requestAnimationFrame so drawing survives tab throttling
+        if (drawIntervalId) clearInterval(drawIntervalId);
+        isDrawing = true;
+        drawIntervalId = setInterval(drawFrame, 1000 / FPS);
+
+        previewPlaceholder.hidden = true;
+        previewCanvas.hidden = false;
+        controlsSection.hidden = false;
+        toggleWebcamBtn.disabled = false;
+
+        setStatus('Live preview. Drag the webcam bubble to move it, hover it to resize.');
+
+        const videoTrack = screenStream.getVideoTracks()[0];
+        const trackLabel = videoTrack.label || 'Screen';
+
+        if (trackLabel.includes('screen:')) {
+            selectedScreenSourceName = 'Entire screen';
+        } else if (trackLabel.includes('window:')) {
+            selectedScreenSourceName = 'Window';
+        } else if (trackLabel.includes('web-contents') || trackLabel.includes('tab')) {
+            selectedScreenSourceName = 'Browser tab';
+        } else {
+            selectedScreenSourceName = trackLabel;
+        }
+
+        updateSourceInfo();
+
+        videoTrack.onended = () => {
+            stopPreview();
+        };
+
+        return true;
+    } catch (error) {
+        console.error('Error selecting screen source:', error);
+        if (error && error.name === 'NotAllowedError') {
+            setStatus(screenStream ? 'Kept the current screen.' : 'Screen sharing was cancelled. Hit Get started to try again.');
+        } else if (isTouchPrimary()) {
+            // Phones and tablets expose getDisplayMedia but every call fails - no real backend behind it.
+            showUnsupportedNotice();
+        } else {
+            setStatus('Could not capture the screen: ' + error.message);
+        }
+        return false;
+    }
+}
+
+async function selectAudioSource() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+        audioDevicesList.innerHTML = '';
+
+        if (audioDevices.length === 0) {
+            const note = document.createElement('div');
+            note.className = 'empty-note';
+            note.textContent = 'No microphones found.';
+            audioDevicesList.appendChild(note);
+        }
+
+        audioDevices.forEach((device, index) => {
+            const item = document.createElement('div');
+            item.className = 'device' + (device.deviceId === selectedAudioDeviceId ? ' selected' : '');
+            item.textContent = device.label || ('Microphone ' + (index + 1));
+            item.addEventListener('click', () => selectAudioDevice(device.deviceId));
+            audioDevicesList.appendChild(item);
+        });
+
+        openModal(audioSourceModal);
+    } catch (error) {
+        console.error('Error listing audio devices:', error);
+        setStatus('Could not list microphones: ' + error.message);
+    }
+}
+
+async function selectAudioDevice(deviceId) {
+    const ok = await acquireMicrophone(deviceId);
+    if (!ok) {
+        setStatus('Could not switch microphone.');
+    }
+    updateSourceInfo();
+    closeModal(audioSourceModal);
+}
+
+function updateSourceInfo() {
+    screenSourceInfo.textContent = 'Screen: ' + selectedScreenSourceName;
+    audioSourceInfo.textContent = 'Mic: ' + selectedAudioSourceName;
+    sourceInfo.hidden = false;
+}
+
+function stopPreview() {
+    if (drawIntervalId) {
+        clearInterval(drawIntervalId);
+        drawIntervalId = null;
+    }
+
+    if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+
+    stopTimer();
+
+    [screenStream, audioStream, webcamStream].forEach(stream => {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+    });
+    screenStream = null;
+    audioStream = null;
+    webcamStream = null;
+
+    isDrawing = false;
+    isRecording = false;
+    webcamEnabled = false;
+    selectedScreenSourceName = 'None';
+    selectedAudioSourceName = 'None';
+    selectedAudioDeviceId = null;
+    webcamX = null;
+    webcamY = null;
+    webcamScale = 1;
+    isDraggingWebcam = false;
+    webcamZoomControls.hidden = true;
+
+    ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+    sourceInfo.hidden = true;
+    setRecordingUI(false);
+    toggleWebcamBtn.textContent = 'Hide webcam';
+
+    previewPlaceholder.hidden = false;
+    previewCanvas.hidden = true;
+    controlsSection.hidden = true;
+    requestPermissionsBtn.disabled = false;
+
+    setStatus('Screen sharing stopped.');
+}
+
+// Recording
+
+function setRecordingUI(recording) {
+    toggleRecordingBtn.classList.toggle('recording', recording);
+    recordLabel.textContent = recording ? 'Stop' : 'Record';
+    selectScreenSourceBtn.disabled = recording;
+    selectAudioSourceBtn.disabled = recording;
+}
+
+async function toggleRecording() {
+    if (!isRecording) {
+        await startRecording();
+    } else {
+        stopRecording();
+    }
+}
+
+function pickMimeType() {
+    const candidates = [
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+    ];
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+async function startRecording() {
+    try {
+        if (!isDrawing || !screenStream) {
+            setStatus('No screen selected yet.');
+            return;
+        }
+
+        // developer.mozilla.org/docs/Web/API/HTMLCanvasElement/captureStream
+        const canvasStream = previewCanvas.captureStream(FPS);
+        if (canvasStream.getTracks().length === 0) {
+            setStatus('Could not capture the preview.');
+            return;
+        }
+
+        let combinedStream = canvasStream;
+        if (audioStream) {
+            const audioTracks = audioStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+            }
+        }
+
+        currentMimeType = pickMimeType();
+        if (!currentMimeType) {
+            setStatus('This browser cannot record video.');
+            return;
+        }
+
+        // developer.mozilla.org/docs/Web/API/MediaRecorder
+        mediaRecorder = new MediaRecorder(combinedStream, {
+            mimeType: currentMimeType,
+            videoBitsPerSecond: VIDEO_BITRATE
+        });
+
+        recordedChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            showTrimEditor();
+        };
+
+        mediaRecorder.onerror = (event) => {
+            console.error('MediaRecorder error:', event);
+            setStatus('Recording error: ' + (event.error ? event.error.message || event.error : 'unknown'));
+        };
+
+        mediaRecorder.start(1000);
+
+        isRecording = true;
+        setRecordingUI(true);
+        setStatus('Recording. ' + (audioStream ? 'Microphone is on.' : 'No microphone, video only.'));
+
+        startTimer();
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        setStatus('Could not start recording: ' + error.message);
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+
+    isRecording = false;
+    setRecordingUI(false);
+    setStatus('Finishing up...');
+
+    stopTimer();
+}
+
+function recordingExtension() {
+    return currentMimeType.includes('mp4') ? 'mp4' : 'webm';
+}
+
+function timestamp() {
+    return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function downloadRecording() {
+    if (recordedChunks.length === 0) {
+        setStatus('Nothing was recorded. Record for at least one second.');
+        return;
+    }
+
+    const blob = new Blob(recordedChunks, { type: currentMimeType });
+    triggerDownload(blob, 'screen-recording-' + timestamp() + '.' + recordingExtension());
+
+    setStatus('Downloaded. Ready to record again.');
+    recordedChunks = [];
+}
+
+async function toggleWebcam() {
+    if (!webcamStream) {
+        toggleWebcamBtn.disabled = true;
+        const ok = await acquireWebcam();
+        toggleWebcamBtn.disabled = false;
+        if (!ok) {
+            setStatus('Could not access the webcam.');
+            return;
+        }
+        webcamEnabled = true;
+    } else {
+        webcamEnabled = !webcamEnabled;
+    }
+    if (!webcamEnabled) webcamZoomControls.hidden = true;
+    toggleWebcamBtn.textContent = webcamEnabled ? 'Hide webcam' : 'Show webcam';
+}
+
+function drawFrame() {
+    if (!isDrawing) return;
+
+    ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+    if (screenVideo.readyState === screenVideo.HAVE_ENOUGH_DATA) {
+        ctx.drawImage(screenVideo, 0, 0, screenVideo.videoWidth * videoScale, screenVideo.videoHeight * videoScale);
+    }
+
+    if (webcamEnabled && webcamVideo.readyState === webcamVideo.HAVE_ENOUGH_DATA) {
+        const { diameter, radius, centerX, centerY } = webcamGeometry();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+
+        // Scale webcam to cover the circle
+        const videoAspect = webcamVideo.videoWidth / webcamVideo.videoHeight;
+        let drawWidth = diameter;
+        let drawHeight = diameter / videoAspect;
+        if (drawHeight < diameter) {
+            drawHeight = diameter;
+            drawWidth = diameter * videoAspect;
+        }
+
+        ctx.drawImage(webcamVideo, centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
+        ctx.restore();
+    }
+}
+
+// Webcam drag and zoom
+
+function getCanvasCoordinates(clientX, clientY) {
+    const rect = previewCanvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) * (previewCanvas.width / rect.width),
+        y: (clientY - rect.top) * (previewCanvas.height / rect.height)
+    };
+}
+
+function beginWebcamDrag(coords) {
+    const { radius, centerX, centerY } = webcamGeometry();
+    if (!isPointInWebcam(coords.x, coords.y, centerX, centerY, radius)) return false;
+    isDraggingWebcam = true;
+    dragOffsetX = coords.x - centerX;
+    dragOffsetY = coords.y - centerY;
+    return true;
+}
+
+function moveWebcam(coords) {
+    const { radius } = webcamGeometry();
+    webcamX = Math.max(radius, Math.min(CANVAS_WIDTH - radius, coords.x - dragOffsetX));
+    webcamY = Math.max(radius, Math.min(previewCanvas.height - radius, coords.y - dragOffsetY));
+    updateZoomControlsPosition(webcamX, webcamY);
+}
+
+function handleWebcamMouseDown(event) {
+    if (!webcamEnabled) return;
+    if (beginWebcamDrag(getCanvasCoordinates(event.clientX, event.clientY))) {
+        previewCanvas.style.cursor = 'grabbing';
+        event.preventDefault();
+    }
+}
+
+function handleWebcamMouseMove(event) {
+    if (!webcamEnabled) return;
+
+    const coords = getCanvasCoordinates(event.clientX, event.clientY);
+
+    if (isDraggingWebcam) {
+        moveWebcam(coords);
+        event.preventDefault();
+        return;
+    }
+
+    const { radius, centerX, centerY } = webcamGeometry();
+    if (isPointInWebcam(coords.x, coords.y, centerX, centerY, radius)) {
+        previewCanvas.style.cursor = 'grab';
+        updateZoomControlsPosition(centerX, centerY);
+    } else {
+        previewCanvas.style.cursor = 'default';
+        webcamZoomControls.hidden = true;
+    }
+}
+
+function handleWebcamMouseUp(event) {
+    if (isDraggingWebcam) {
+        isDraggingWebcam = false;
+        previewCanvas.style.cursor = 'default';
+        event.preventDefault();
+    }
+}
+
+function handleWebcamTouchStart(event) {
+    if (!webcamEnabled || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    if (beginWebcamDrag(getCanvasCoordinates(touch.clientX, touch.clientY))) {
+        event.preventDefault();
+    }
+}
+
+function handleWebcamTouchMove(event) {
+    if (!webcamEnabled || !isDraggingWebcam || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    moveWebcam(getCanvasCoordinates(touch.clientX, touch.clientY));
+    event.preventDefault();
+}
+
+function handleWebcamTouchEnd(event) {
+    if (isDraggingWebcam) {
+        isDraggingWebcam = false;
+        event.preventDefault();
+    }
+}
+
+function updateZoomControlsPosition(centerX, centerY) {
+    const canvasRect = previewCanvas.getBoundingClientRect();
+    const containerRect = previewContainer.getBoundingClientRect();
+
+    const displayCenterX = centerX * (canvasRect.width / previewCanvas.width);
+    const displayCenterY = centerY * (canvasRect.height / previewCanvas.height);
+
+    webcamZoomControls.style.left = (canvasRect.left - containerRect.left + displayCenterX) + 'px';
+    webcamZoomControls.style.top = (canvasRect.top - containerRect.top + displayCenterY - 16) + 'px';
+    webcamZoomControls.hidden = false;
+}
+
+zoomInBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (webcamScale < WEBCAM_MAX_SCALE) webcamScale += 0.5;
+});
+
+zoomOutBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (webcamScale > WEBCAM_MIN_SCALE) webcamScale -= 0.5;
+});
+
+// Trim editor
+
+function showTrimEditor() {
+    if (recordedChunks.length === 0) {
+        setStatus('Nothing was recorded. Record for at least one second.');
+        return;
+    }
+
+    // WebM from MediaRecorder has no duration metadata, so the trimmer only works for MP4.
+    if (!currentMimeType.includes('mp4')) {
+        downloadRecording();
+        return;
+    }
+
+    recordedVideoBlob = new Blob(recordedChunks, { type: currentMimeType });
+    trimPreviewVideo.src = URL.createObjectURL(recordedVideoBlob);
+
+    trimPreviewVideo.onloadedmetadata = () => {
+        videoDuration = trimPreviewVideo.duration;
+        trimStartTime = 0;
+        trimEndTime = videoDuration;
+        trimPreviewVideo.currentTime = 0;
+        updateTrimUI();
+    };
+
+    // Keep playback inside the trim bounds
+    trimPreviewVideo.ontimeupdate = () => {
+        if (trimPreviewVideo.currentTime < trimStartTime) {
+            trimPreviewVideo.currentTime = trimStartTime;
+        }
+        if (trimPreviewVideo.currentTime > trimEndTime) {
+            trimPreviewVideo.pause();
+            trimPreviewVideo.currentTime = trimEndTime;
+        }
+    };
+
+    openModal(trimEditorModal);
+    setStatus('Trim your recording, or download it as is.');
+}
+
+function updateTrimUI(draggingHandle = null) {
+    const startPercent = (trimStartTime / videoDuration) * 100;
+    const endPercent = (trimEndTime / videoDuration) * 100;
+
+    trimHandleStart.style.left = startPercent + '%';
+    trimHandleEnd.style.right = (100 - endPercent) + '%';
+    trimRange.style.left = startPercent + '%';
+    trimRange.style.width = (endPercent - startPercent) + '%';
+
+    trimStartTimeDisplay.textContent = formatTime(trimStartTime);
+    trimEndTimeDisplay.textContent = formatTime(trimEndTime);
+    trimDurationDisplay.textContent = formatTime(trimEndTime - trimStartTime);
+
+    // Show the frame at the edge being adjusted
+    trimPreviewVideo.currentTime = draggingHandle === 'end' ? trimEndTime : trimStartTime;
+    updateVideoProgress();
+}
+
+function updateVideoProgress() {
+    if (!videoDuration) return;
+
+    const startPercent = (trimStartTime / videoDuration) * 100;
+    const currentPercent = (trimPreviewVideo.currentTime / videoDuration) * 100;
+
+    videoProgressFilled.style.left = startPercent + '%';
+    videoProgressFilled.style.width = Math.max(0, currentPercent - startPercent) + '%';
+    videoProgressHandle.style.left = currentPercent + '%';
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return mins + ':' + secs.toString().padStart(2, '0');
+}
+
+// Routes the export video's audio into the re-encoded stream without playing it out loud
+// developer.mozilla.org/docs/Web/API/AudioContext/createMediaElementSource
+function withExportAudio(captureVideo, canvasStream) {
+    try {
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) return canvasStream;
+        audioCtx = audioCtx || new AudioContextCtor();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const source = audioCtx.createMediaElementSource(captureVideo);
+        const destination = audioCtx.createMediaStreamDestination();
+        source.connect(destination);
+        captureVideo.muted = false;
+        return new MediaStream([...canvasStream.getVideoTracks(), ...destination.stream.getAudioTracks()]);
+    } catch (error) {
+        console.warn('Trimmed export will be video only:', error);
+        return canvasStream;
+    }
+}
+
+async function trimAndDownload() {
+    trimStatus.textContent = 'Exporting. This takes as long as the trimmed clip.';
+    trimDownloadBtn.disabled = true;
+    trimCancelBtn.disabled = true;
+    trimPreviewVideo.pause();
+
+    try {
+        const captureVideo = document.createElement('video');
+        captureVideo.src = URL.createObjectURL(recordedVideoBlob);
+        captureVideo.muted = true;
+        captureVideo.playsInline = true;
+
+        await new Promise(resolve => {
+            captureVideo.onloadedmetadata = resolve;
+        });
+
+        captureVideo.currentTime = trimStartTime;
+        await new Promise(resolve => {
+            captureVideo.onseeked = resolve;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = captureVideo.videoWidth;
+        canvas.height = captureVideo.videoHeight;
+        const exportCtx = canvas.getContext('2d');
+
+        const stream = withExportAudio(captureVideo, canvas.captureStream(FPS));
+
+        const recorder = new MediaRecorder(stream, {
+            mimeType: currentMimeType,
+            videoBitsPerSecond: VIDEO_BITRATE
+        });
+        const chunks = [];
+
+        recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) chunks.push(event.data);
+        };
+
+        recorder.onstop = () => {
+            const trimmedBlob = new Blob(chunks, { type: currentMimeType });
+            triggerDownload(trimmedBlob, 'screen-recording-trimmed-' + timestamp() + '.' + recordingExtension());
+            URL.revokeObjectURL(captureVideo.src);
+            closeTrimEditorModal();
+            setStatus('Downloaded. Ready to record again.');
+        };
+
+        recorder.start();
+        await captureVideo.play();
+
+        const step = () => {
+            if (captureVideo.currentTime < trimEndTime && !captureVideo.paused && !captureVideo.ended) {
+                exportCtx.drawImage(captureVideo, 0, 0);
+                requestAnimationFrame(step);
+            } else {
+                captureVideo.pause();
+                recorder.stop();
+            }
+        };
+        requestAnimationFrame(step);
+    } catch (error) {
+        console.error('Trim error:', error);
+        trimStatus.textContent = 'Trimming failed. Downloading the original instead.';
+        setTimeout(downloadOriginal, 1500);
+    }
+}
+
+function downloadOriginal() {
+    if (!recordedVideoBlob) return;
+    triggerDownload(recordedVideoBlob, 'screen-recording-' + timestamp() + '.' + recordingExtension());
+    closeTrimEditorModal();
+    setStatus('Downloaded. Ready to record again.');
+}
+
+function askDiscard() {
+    if (!trimEditorModal.classList.contains('open')) return;
+    trimPreviewVideo.pause();
+    discardConfirm.hidden = false;
+}
+
+function keepEditing() {
+    discardConfirm.hidden = true;
+}
+
+function discardRecording() {
+    closeTrimEditorModal();
+    setStatus('Recording discarded. Ready to record again.');
+}
+
+function closeTrimEditorModal() {
+    closeModal(trimEditorModal);
+    discardConfirm.hidden = true;
+    trimPreviewVideo.pause();
+    if (trimPreviewVideo.src) {
+        URL.revokeObjectURL(trimPreviewVideo.src);
+        trimPreviewVideo.removeAttribute('src');
+        trimPreviewVideo.load();
+    }
+    recordedVideoBlob = null;
+    recordedChunks = [];
+    trimDownloadBtn.disabled = false;
+    trimCancelBtn.disabled = false;
+    trimStatus.textContent = '';
+}
+
+function percentAlong(track, clientX) {
+    const rect = track.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    return x / rect.width;
+}
+
+trimHandleStart.addEventListener('mousedown', () => { isDraggingTrimHandle = 'start'; });
+trimHandleEnd.addEventListener('mousedown', () => { isDraggingTrimHandle = 'end'; });
+
+document.addEventListener('mousemove', (event) => {
+    if (isDraggingTrimHandle) {
+        const time = percentAlong(timelineTrack, event.clientX) * videoDuration;
+        if (isDraggingTrimHandle === 'start') {
+            trimStartTime = Math.max(0, Math.min(time, trimEndTime - 1));
+        } else {
+            trimEndTime = Math.min(videoDuration, Math.max(time, trimStartTime + 1));
+        }
+        updateTrimUI(isDraggingTrimHandle);
+    } else if (isDraggingProgress) {
+        trimPreviewVideo.currentTime = percentAlong(videoProgressTrack, event.clientX) * videoDuration;
+        updateVideoProgress();
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    isDraggingTrimHandle = null;
+    isDraggingProgress = false;
+});
+
+const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>';
+const PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1"/><rect x="13.5" y="5" width="4.5" height="14" rx="1"/></svg>';
+
+function setPlayButton(playing) {
+    videoPlayPause.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    videoPlayPause.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    videoPlayPause.style.opacity = playing ? '0' : '1';
+}
+
+videoPlayPause.addEventListener('click', () => {
+    if (trimPreviewVideo.paused) {
+        if (trimPreviewVideo.currentTime >= trimEndTime - 0.1) {
+            trimPreviewVideo.currentTime = trimStartTime;
+        }
+        trimPreviewVideo.play();
+    } else {
+        trimPreviewVideo.pause();
+    }
+});
+
+trimPreviewVideo.addEventListener('click', () => videoPlayPause.click());
+trimPreviewVideo.addEventListener('play', () => setPlayButton(true));
+trimPreviewVideo.addEventListener('pause', () => setPlayButton(false));
+trimPreviewVideo.addEventListener('mouseenter', () => {
+    if (!trimPreviewVideo.paused) videoPlayPause.style.opacity = '0.7';
+});
+trimPreviewVideo.addEventListener('mouseleave', () => {
+    if (!trimPreviewVideo.paused) videoPlayPause.style.opacity = '0';
+});
+trimPreviewVideo.addEventListener('timeupdate', updateVideoProgress);
+
+videoProgressHandle.addEventListener('mousedown', (event) => {
+    event.stopPropagation();
+    isDraggingProgress = true;
+});
+
+videoProgressTrack.addEventListener('mousedown', (event) => {
+    if (event.target === videoProgressTrack || event.target === videoProgressFilled) {
+        isDraggingProgress = true;
+        trimPreviewVideo.currentTime = percentAlong(videoProgressTrack, event.clientX) * videoDuration;
+        updateVideoProgress();
+    }
+});
+
+closeTrimEditor.addEventListener('click', askDiscard);
+discardRecordingBtn.addEventListener('click', askDiscard);
+discardKeepBtn.addEventListener('click', keepEditing);
+discardConfirmBtn.addEventListener('click', discardRecording);
+trimCancelBtn.addEventListener('click', downloadOriginal);
+trimDownloadBtn.addEventListener('click', trimAndDownload);
+
+// Timer
+
+function startTimer() {
+    recordingStartTime = Date.now();
+    timerContainer.hidden = false;
+    timerText.textContent = '0:00';
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    timerContainer.hidden = true;
+    recordingStartTime = null;
+}
+
+function updateTimer() {
+    if (!recordingStartTime) return;
+    timerText.textContent = formatTime((Date.now() - recordingStartTime) / 1000);
+}
+
+// Wiring
+
+requestPermissionsBtn.addEventListener('click', requestPermissions);
+toggleRecordingBtn.addEventListener('click', toggleRecording);
+toggleWebcamBtn.addEventListener('click', toggleWebcam);
+selectAudioSourceBtn.addEventListener('click', selectAudioSource);
+selectScreenSourceBtn.addEventListener('click', () => selectScreenSource());
+closeAudioModal.addEventListener('click', () => closeModal(audioSourceModal));
+
+saveForLaterBtn.addEventListener('click', () => openModal(saveModal));
+closeSaveModal.addEventListener('click', () => closeModal(saveModal));
+saveNotNowBtn.addEventListener('click', () => closeModal(saveModal));
+downloadPageBtn.addEventListener('click', downloadPage);
+
+// Close on backdrop click, but only if the press also started on the backdrop
+function onBackdropClick(modal, handler) {
+    let pressedOnBackdrop = false;
+    modal.addEventListener('mousedown', (event) => {
+        pressedOnBackdrop = event.target === modal;
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal && pressedOnBackdrop) handler();
+        pressedOnBackdrop = false;
+    });
+}
+
+onBackdropClick(saveModal, () => closeModal(saveModal));
+onBackdropClick(audioSourceModal, () => closeModal(audioSourceModal));
+onBackdropClick(trimEditorModal, askDiscard);
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        closeModal(saveModal);
+        closeModal(audioSourceModal);
+    }
+});
+
+previewCanvas.addEventListener('mousedown', handleWebcamMouseDown);
+previewCanvas.addEventListener('mousemove', handleWebcamMouseMove);
+previewCanvas.addEventListener('mouseup', handleWebcamMouseUp);
+previewCanvas.addEventListener('mouseleave', handleWebcamMouseUp);
+previewCanvas.addEventListener('touchstart', handleWebcamTouchStart, { passive: false });
+previewCanvas.addEventListener('touchmove', handleWebcamTouchMove, { passive: false });
+previewCanvas.addEventListener('touchend', handleWebcamTouchEnd);
+
+// developer.mozilla.org/docs/Web/API/Screen_Capture_API - desktop browsers only
+if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    showUnsupportedNotice();
+}
+})();
+</script>
+</body>
+</html>
